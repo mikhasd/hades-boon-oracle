@@ -32,6 +32,42 @@
     </div>
   </header>
 
+  <!-- ===================== DAMAGE CALCULATOR ===================== -->
+  <section class="dmgpanel" id="dmgpanel" aria-label="Damage calculator">
+    <div class="dp-weapon-row">
+      <span class="dp-label">Weapon</span>
+      <div class="dp-weapons" id="dpWeapons" role="group" aria-label="Choose weapon"></div>
+    </div>
+    <div class="dp-daedala-row">
+      <span class="dp-label">Daedala</span>
+      <div class="dp-daedala" id="dpDaedala" role="group" aria-label="Daedalus upgrades for the current weapon"></div>
+    </div>
+    <div class="dp-readout">
+      <div class="dp-stat" id="dpAttack">
+        <span class="dp-stat-name">⚔ Attack</span>
+        <span class="dp-stat-val" id="dpAttackVal">–</span>
+        <span class="dp-stat-note" id="dpAttackNote"></span>
+      </div>
+      <div class="dp-stat" id="dpSpecial">
+        <span class="dp-stat-name">✦ Special</span>
+        <span class="dp-stat-val" id="dpSpecialVal">–</span>
+        <span class="dp-stat-note" id="dpSpecialNote"></span>
+      </div>
+      <div class="dp-stat" id="dpCast">
+        <span class="dp-stat-name">☄ Cast</span>
+        <span class="dp-stat-val" id="dpCastVal">–</span>
+        <span class="dp-stat-note" id="dpCastNote"></span>
+      </div>
+      <div class="dp-stat dp-stat-crit">
+        <span class="dp-stat-name">☠ Crit bonus</span>
+        <span class="dp-stat-val" id="dpCritVal">+200%</span>
+        <span class="dp-stat-note">on critical hits</span>
+      </div>
+      <button type="button" class="dp-toggle" id="dpToggle" aria-expanded="false">breakdown</button>
+    </div>
+    <div class="dp-breakdown" id="dpBreakdown"></div>
+  </section>
+
   <!-- ===================== LANES ===================== -->
   <main class="lanes" id="lanes"></main>
 
@@ -69,6 +105,16 @@
       <button id="popSelect" class="select-btn" type="button"></button>
     </div>
     <p id="popDesc" class="pop-desc"></p>
+    <div class="pop-tuning" id="popTuning">
+      <div class="pop-rarity" id="popRarity" role="group" aria-label="Boon rarity"></div>
+      <div class="pop-level">
+        <button type="button" class="lv-btn" id="lvDown" aria-label="Decrease level">−</button>
+        <span class="lv-label">Level <b id="lvVal">1</b></span>
+        <button type="button" class="lv-btn" id="lvUp" aria-label="Increase level">+</button>
+        <span class="lv-lock" id="popLevelLock" hidden>fixed</span>
+      </div>
+    </div>
+    <div class="pop-dmg" id="popDmg"></div>
     <div class="pop-duos" id="popDuoList"></div>
   </div>
 

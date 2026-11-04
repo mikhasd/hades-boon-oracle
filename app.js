@@ -1,7 +1,8 @@
 /* =========================================================================
    Hades — Boon Oracle
    Picks boons, tracks your run, and highlights the picks that unlock
-   the strongest Duo Boons.
+   the strongest Duo Boons. Includes an Attack / Special / Cast damage
+   calculator driven by weapon, Daedala, and selected boons (rarity + level).
    ========================================================================= */
 "use strict";
 
@@ -9,18 +10,66 @@
 const GOD_BY_ID = Object.fromEntries(GODS.map(g => [g.id, g]));
 const BOON_BY_ID = Object.fromEntries(BOONS.map(b => [b.id, b]));
 const DUO_BY_ID = Object.fromEntries(DUOS.map(d => [d.id, d]));
+const WEAPON_BY_ID = Object.fromEntries(WEAPONS.map(w => [w.id, w]));
+const DAEDALUS_BY_ID = Object.fromEntries(DAEDALA.map(d => [d.id, d]));
 
 const SLOT_LABEL = {
   attack: "Attack", special: "Special", cast: "Cast",
   dash: "Dash", call: "Call", util: "Utility",
 };
 
+/* --------------------------- damage model ------------------------------ */
+/* Base values come from the Fandom wiki god "Boons (Hades)" tables
+   (rank-1 value per rarity). Level scaling follows the documented
+   "Pom of Power" model: per-level boosts of ~28/20/14/10/7 % of the
+   base for level 2..6 (diminishing), or +1 flat per level for low-base
+   boons (base < 10). Legendary / duo values are fixed. */
+const RARITIES = ["common", "rare", "epic", "heroic"];
+const RARITY_SHORT = { common: "C", rare: "R", epic: "E", heroic: "H" };
+const RARITY_COLOR = {
+  common: "#a89f94", rare: "#4d9be6", epic: "#b06be0", heroic: "#e5a50b",
+};
+const DEF_CURVE = [1, 1.25, 1.5, 2];            // default rarity curve
+const LEVEL_MULT = [1, 1.28, 1.48, 1.62, 1.72, 1.79]; // level 1..6
+const MIN_LEVEL = 1, MAX_LEVEL = 6;
+
+function entryValue(e, r, l) {
+  if (e.lg) return e.b;                                   // fixed value
+  const rv = e.st != null ? e.b + e.st * r
+                          : e.b * (e.c ? e.c[r] : DEF_CURVE[r]);
+  if (e.b < 10) return rv + (l - 1);                      // low base: +1/level
+  return rv * LEVEL_MULT[l - 1];
+}
+
+const fmt = x => {
+  const r = Math.round(x * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+};
+
+function entryLine(e, v) {
+  const slotName = {
+    attack: "Attack", special: "Special", cast: "Cast",
+    asp: "Attack + Special", all: "All damage",
+    crit: "Crit damage", critc: "Crit chance",
+    dash: "Dash", call: "Call", revenge: "Revenge", other: "Effect",
+  }[e.s] || e.s;
+  const val = e.k === "pct" ? "+" + fmt(v) + "%" : fmt(v);
+  return slotName + (e.lb ? " " + e.lb : "") + ": " + val;
+}
+
 /* ---------------------------- state ------------------------------------ */
 const state = {
   selected: new Set(),          // boon ids in your run
   visibleGods: new Set(GODS.map(g => g.id)),
   search: "",
+  weapon: "blade",              // current weapon id
+  daedala: {                    // per-weapon selected daedala ids
+    blade: new Set(), spear: new Set(), bow: new Set(),
+    shield: new Set(), fists: new Set(), rail: new Set(),
+  },
+  bonus: {},                    // boon id -> { r: 0..3, l: 1..6 }
 };
+const bonusOf = id => state.bonus[id] || (state.bonus[id] = { r: 0, l: 1 });
 
 /* ---------------------------- logic ------------------------------------ */
 const groupMet = (group, sel) => group.some(id => sel.has(id));
@@ -50,6 +99,137 @@ function candidateSet(sel) {
   }
   return out;
 }
+
+/* ------------------------ damage calculator ---------------------------- */
+/* Applies weapon base damage, selected Daedala, selected boons (at their
+   rarity/level), and ready-duo modifiers. Returns per-stat values plus a
+   contributor breakdown. Formula (per the wiki "Damage Calculation" page):
+   (base + flat adds) x (1 + sum of % bonuses). */
+function computeDamage() {
+  const w = WEAPON_BY_ID[state.weapon];
+  const acc = {
+    attack:  { base: [...w.atk], flat: 0, mult: 1, hits: w.atk_hits, list: [] },
+    special: { base: [w.sp, w.sp], flat: 0, mult: 1, hits: w.sp_hits, list: [] },
+    cast:    { base: [0, 0], flat: 0, mult: 1, hits: 1, list: [], source: null },
+    crit:    { bonus: 200, list: [] },
+  };
+  let hasCond = false;
+
+  const push = (slot, name, text, cond) => {
+    if (cond) hasCond = true;
+    acc[slot].list.push({ name, text, cond });
+  };
+  const apply = (slot, e, v, name, cond) => {
+    if (e.k === "pct") acc[slot].mult += v / 100;
+    else acc[slot].flat += v;
+    push(slot, name, entryLine(e, v), cond);
+  };
+
+  /* selected boons */
+  const castFlatPick = [];   // every selected cast-flat boon, in pick order
+  for (const id of state.selected) {
+    const b = BOON_BY_ID[id];
+    if (!b.dmg || !b.dmg.length) continue;
+    const { r, l } = bonusOf(id);
+    const tag = (RARITY_SHORT[RARITIES[r]] + (l > 1 ? l : ""));
+    const name = b.name + (tag && (r > 0 || l > 1) ? " (" + tag + ")" : "");
+    for (const e of b.dmg) {
+      const v = entryValue(e, r, l);
+      const cond = !!e.cd;
+      /* cast boons define the cast's base damage; one is active in-game
+         (last pick wins), so collect them instead of adding to the total */
+      if (e.s === "cast" && e.k === "flat") {
+        castFlatPick.push({ b, e, v, name, cond });
+        continue;
+      }
+      switch (e.s) {
+        case "attack":  apply("attack", e, v, name, cond); break;
+        case "special": apply("special", e, v, name, cond); break;
+        case "cast":    apply("cast", e, v, name, cond); break;
+        case "asp":     apply("attack", e, v, name, cond);
+                        apply("special", e, v, name, cond); break;
+        case "all":     apply("attack", e, v, name, cond);
+                        apply("special", e, v, name, cond);
+                        apply("cast", e, v, name, cond); break;
+        case "crit":    acc.crit.bonus += v;
+                        push("crit", name, entryLine(e, v), cond); break;
+        case "critc":   push("crit", name, entryLine(e, v), cond); break;
+        default:        push("attack", name, entryLine(e, v), cond); // info only
+      }
+    }
+  }
+  /* cast base: one cast boon is active in-game; last pick wins */
+  if (castFlatPick.length) {
+    const active = castFlatPick[castFlatPick.length - 1];
+    acc.cast.base = [active.v, active.v];
+    acc.cast.source = active.b.name;
+    push("cast", active.name, entryLine(active.e, active.v), active.cond);
+    for (let i = 0; i < castFlatPick.length - 1; i++) {
+      acc.cast.list.push({ name: castFlatPick[i].name, text: "replaced by " + active.b.name, cond: false });
+    }
+  }
+
+  /* ready duo modifiers (fixed values, no rarity/level) */
+  for (const d of readyDuos(state.selected)) {
+    if (!d.dmg || !d.dmg.length) continue;
+    for (const e of d.dmg) {
+      const v = entryValue(e, 0, 1);
+      const name = "Duo: " + d.name;
+      if (e.s === "crit") {
+        acc.crit.bonus += v;
+        push("crit", name, entryLine(e, v), !!e.cd);
+      } else if (e.s === "cast") {
+        apply("cast", e, v, name, !!e.cd);
+      }
+    }
+  }
+
+  /* daedala of the current weapon (in-game upgrades persist per weapon,
+     but only the current weapon's numbers matter for its damage line) */
+  for (const id of state.daedala[state.weapon]) {
+    const dd = DAEDALUS_BY_ID[id];
+    for (const m of dd.mods || []) {
+      if (m.t === "repl") {
+        acc[m.s].base = [m.v, m.v];
+        if (m.h) acc[m.s].hits = m.h;
+        push(m.s, dd.name, m.s === "attack" ? "Attack base → " + m.v : "Special base → " + m.v, false);
+      } else if (m.t === "pct") {
+        acc[m.s].mult += m.v / 100;
+        push(m.s, dd.name, (m.s === "attack" ? "Attack" : "Special") + " " + (m.v > 0 ? "+" : "") + m.v + "%", false);
+      } else if (m.t === "flat") {
+        acc[m.s].flat += m.v;
+        push(m.s, dd.name, fmt(m.v) + " flat", false);
+      } else if (m.t === "hits") {
+        acc[m.s].hits = m.v;
+        push(m.s, dd.name, "Hits → " + m.v, false);
+      } else if (m.t === "hits+") {
+        acc[m.s].hits += m.v;
+        push(m.s, dd.name, "Hits +" + m.v, false);
+      }
+    }
+  }
+
+  const fin = a => [
+    Math.round((a.base[0] + a.flat) * a.mult * 10) / 10,
+    Math.round((a.base[1] + a.flat) * a.mult * 10) / 10,
+  ];
+  const [a0, a1] = fin(acc.attack);
+  const [s0, s1] = fin(acc.special);
+  const [c0, c1] = fin(acc.cast);
+  return {
+    attack: { min: a0, max: a1, hits: acc.attack.hits, list: acc.attack.list },
+    special: { min: s0, max: s1, hits: acc.special.hits, list: acc.special.list },
+    cast: { min: c0, max: c1, hits: acc.cast.hits, list: acc.cast.list, source: acc.cast.source },
+    crit: Math.round(acc.crit.bonus),
+    critList: acc.crit.list,
+    hasCond,
+  };
+}
+
+const statText = (st, suffix) => {
+  const t = st.min === st.max ? fmt(st.min) : fmt(st.min) + "–" + fmt(st.max);
+  return t + (suffix || "") + (st.hits > 1 ? " ×" + st.hits : "");
+};
 
 /* ---------------------------- helpers ---------------------------------- */
 const $ = sel => document.querySelector(sel);
@@ -94,6 +274,126 @@ function updateGodFilter() {
   for (const chip of $("#godFilter").children) {
     chip.setAttribute("aria-pressed", state.visibleGods.has(chip.dataset.god) ? "true" : "false");
   }
+}
+
+/* ------------------------ weapon + daedala ------------------------------ */
+function buildWeapons() {
+  const wrap = $("#dpWeapons");
+  for (const w of WEAPONS) {
+    const btn = el("button", "wpn");
+    btn.type = "button";
+    btn.dataset.id = w.id;
+    btn.title = `${w.name} — Attack ${w.atk[0] === w.atk[1] ? w.atk[0] : w.atk[0] + "–" + w.atk[1]}, Special ${w.sp}`;
+    btn.innerHTML = `<img src="${iconSrc(w.icon)}" alt="">${w.name}`;
+    btn.addEventListener("click", () => {
+      if (state.weapon === w.id) return;
+      state.weapon = w.id;
+      updateWeapons();
+      updateDaedala();
+      refresh();
+    });
+    wrap.appendChild(btn);
+  }
+}
+
+function updateWeapons() {
+  for (const btn of $("#dpWeapons").children) {
+    btn.setAttribute("aria-pressed", String(state.weapon === btn.dataset.id));
+  }
+}
+
+function totalDaedala() {
+  return Object.values(state.daedala).reduce((n, s) => n + s.size, 0);
+}
+
+function buildDaedala() {
+  const wrap = $("#dpDaedala");
+  wrap.innerHTML = "";
+  for (const dd of DAEDALA.filter(d => d.weapon === state.weapon)) {
+    const btn = el("button", "dae");
+    btn.type = "button";
+    btn.dataset.id = dd.id;
+    btn.title = dd.desc;
+    btn.innerHTML = `<img src="${iconSrc(dd.icon)}" alt=""><span>${dd.name}</span>`;
+    btn.addEventListener("click", () => toggleDaedala(dd));
+    wrap.appendChild(btn);
+  }
+}
+
+function updateDaedala() {
+  buildDaedala();
+  for (const btn of $("#dpDaedala").children) {
+    btn.setAttribute("aria-pressed", String(state.daedala[state.weapon].has(btn.dataset.id)));
+  }
+}
+
+function toggleDaedala(dd) {
+  const set = state.daedala[dd.weapon];
+  if (set.has(dd.id)) {
+    set.delete(dd.id);
+  } else {
+    if (totalDaedala() >= 2) {
+      toast("Max 2 Daedala per run. Remove one first.");
+      return;
+    }
+    // resolve mutual exclusivity (in-game hammer exclusions)
+    let dropped = [];
+    for (const other of DAEDALA.filter(x => x.weapon === dd.weapon)) {
+      if (other.id === dd.id) continue;
+      const conflicts =
+        (other.excl || []).includes(dd.id) || (dd.excl || []).includes(other.id);
+      if (conflicts && set.has(other.id)) {
+        set.delete(other.id);
+        dropped.push(other.name);
+      }
+    }
+    set.add(dd.id);
+    if (dropped.length) toast(`Replaced: ${dropped.join(", ")}`);
+  }
+  updateDaedala();
+  renderDamage();
+}
+
+/* --------------------------- damage panel ------------------------------ */
+function renderDamage() {
+  const d = computeDamage();
+  const w = WEAPON_BY_ID[state.weapon];
+
+  $("#dpAttackVal").textContent = statText(d.attack);
+  $("#dpAttackNote").textContent =
+    `${w.name.split(" ")[0]} ${w.atk_note}` + (d.hasCond ? " · ⚠" : "");
+  $("#dpSpecialVal").textContent = statText(d.special);
+  $("#dpSpecialNote").textContent = `${w.sp_note}` + (d.hasCond ? " · ⚠" : "");
+  if (d.cast.source) {
+    $("#dpCastVal").textContent = statText(d.cast);
+    $("#dpCastNote").textContent = d.cast.source + (d.hasCond ? " · ⚠" : "");
+  } else {
+    $("#dpCastVal").textContent = "–";
+    $("#dpCastNote").textContent = "no cast boon selected";
+  }
+  $("#dpCritVal").textContent = "+" + d.crit + "%";
+
+  renderBreakdown(d);
+}
+
+function renderBreakdown(d) {
+  const box = $("#dpBreakdown");
+  const statRow = (ico, title, list) => {
+    if (!list.length) return "";
+    const items = list.map(c =>
+      `<span class="bd-item${c.cond ? " cond" : ""}" title="${c.name}">${c.name}: ${c.text}${c.cond ? " ⚠" : ""}</span>`
+    ).join("");
+    return `<div class="bd-row"><span class="bd-stat">${ico} ${title}</span>${items}</div>`;
+  };
+  const parts = [
+    statRow("⚔", "Attack", d.attack.list),
+    statRow("✦", "Special", d.special.list),
+    statRow("☄", "Cast", d.cast.list),
+    statRow("☠", "Crit", d.critList),
+  ].filter(Boolean);
+  box.innerHTML = parts.length
+    ? parts.join("")
+    : `<div class="bd-row bd-empty">Pick boons or Daedala to see what changes your damage.</div>`;
 }
 
 /* ---------------------------- lanes ------------------------------------ */
@@ -170,12 +470,16 @@ function renderLoadout() {
     for (const id of sel) {
       const b = BOON_BY_ID[id];
       const g = GOD_BY_ID[b.god];
+      const { r, l } = bonusOf(id);
       const chip = el("div", "chip");
       chip.style.setProperty("--c", g.color);
-      chip.title = b.name;
+      chip.title = b.name + (r > 0 || l > 1 ? ` (${RARITIES[r]}, Lv ${l})` : "");
       chip.innerHTML =
         `<img src="${iconSrc(b.icon)}" alt="">` +
         `<span class="chip-name">${b.name}</span>` +
+        (r > 0 || l > 1
+          ? `<span class="chip-lv" style="color:${RARITY_COLOR[RARITIES[r]]}">${RARITY_SHORT[RARITIES[r]]}${l > 1 ? l : ""}</span>`
+          : "") +
         `<span class="chip-x" title="Remove">×</span>`;
       chip.querySelector(".chip-x").addEventListener("click", e => {
         e.stopPropagation();
@@ -217,9 +521,11 @@ function toggleSelect(id) {
     state.selected.add(id);
   }
   refresh();
-  // keep the popover button in sync if it is open for this boon
+  // keep the popover in sync if it is open for this boon
   const pop = $("#boonPop");
   if (pop.matches(":popover-open") && pop.dataset.bid === id) {
+    syncPopTuning(id);
+    syncPopDmg(id);
     syncSelectButton(id);
     rebuildPopDuoList(id);
   }
@@ -242,6 +548,9 @@ function openPop(bid, tile) {
   $("#popSlot").textContent = SLOT_LABEL[b.slot] || b.slot;
   $("#popDesc").textContent = b.desc;
 
+  buildPopRarity(b);
+  syncPopTuning(bid);
+  syncPopDmg(bid);
   syncSelectButton(bid);
   rebuildPopDuoList(bid);
 
@@ -251,6 +560,58 @@ function openPop(bid, tile) {
   }
   pop.showPopover();
   $("#popClose").focus();
+}
+
+/* rarity + level controls */
+function buildPopRarity(b) {
+  const wrap = $("#popRarity");
+  wrap.innerHTML = "";
+  for (let i = 0; i < RARITIES.length; i++) {
+    const btn = el("button", "rar");
+    btn.type = "button";
+    btn.dataset.r = i;
+    btn.style.setProperty("--rc", RARITY_COLOR[RARITIES[i]]);
+    btn.textContent = RARITIES[i];
+    btn.addEventListener("click", () => {
+      bonusOf(b.id).r = i;
+      syncPopTuning(b.id);
+      syncPopDmg(b.id);
+      renderDamage();
+    });
+    wrap.appendChild(btn);
+  }
+}
+
+function syncPopTuning(bid) {
+  const b = BOON_BY_ID[bid];
+  const { r, l } = bonusOf(bid);
+  for (const btn of $("#popRarity").children) {
+    btn.setAttribute("aria-pressed", String(Number(btn.dataset.r) === r));
+  }
+  $("#lvVal").textContent = l;
+  const locked = !b.pom;
+  $("#lvDown").disabled = locked || l <= MIN_LEVEL;
+  $("#lvUp").disabled = locked || l >= MAX_LEVEL;
+  $("#lvDown").title = locked ? "Cannot be levelled" : "Level down";
+  $("#lvUp").title = locked ? "Cannot be levelled" : "Level up";
+  $("#popLevelLock").hidden = !locked;
+}
+
+function syncPopDmg(bid) {
+  const box = $("#popDmg");
+  const b = BOON_BY_ID[bid];
+  if (!b.dmg || !b.dmg.length) { box.innerHTML = ""; box.hidden = true; return; }
+  const { r, l } = bonusOf(bid);
+  const rows = b.dmg.map(e => {
+    const v = entryValue(e, r, l);
+    const fixed = e.lg ? " <i>fixed</i>" : "";
+    const cond = e.cd ? " <i>conditional</i>" : "";
+    return `<span class="pop-dmg-row${e.k === "pct" ? " pct" : ""}">
+              ${entryLine(e, v)}${fixed}${cond}
+            </span>`;
+  }).join("");
+  box.innerHTML = `<div class="pop-dmg-title">Damage (${RARITIES[r]}, Lv ${l})</div>${rows}`;
+  box.hidden = false;
 }
 
 function syncSelectButton(bid) {
@@ -329,11 +690,13 @@ function refresh() {
   updateGodFilter();
   updateLanes();
   renderLoadout();
+  renderDamage();
 }
 
 /* ---------------------------- init ------------------------------------- */
 function init() {
   buildGodFilter();
+  buildWeapons();
   buildLanes();
 
   $("#btnAll").addEventListener("click", () => {
@@ -357,6 +720,26 @@ function init() {
 
   $("#popClose").addEventListener("click", () => $("#boonPop").hidePopover());
 
+  $("#lvDown").addEventListener("click", () => {
+    const bid = $("#boonPop").dataset.bid;
+    const s = bonusOf(bid);
+    if (s.l > MIN_LEVEL) { s.l--; syncPopTuning(bid); syncPopDmg(bid); renderDamage(); }
+  });
+  $("#lvUp").addEventListener("click", () => {
+    const bid = $("#boonPop").dataset.bid;
+    const b = BOON_BY_ID[bid];
+    const s = bonusOf(bid);
+    if (b.pom && s.l < MAX_LEVEL) { s.l++; syncPopTuning(bid); syncPopDmg(bid); renderDamage(); }
+  });
+
+  $("#dpToggle").addEventListener("click", () => {
+    const bd = $("#dpBreakdown");
+    const open = bd.classList.toggle("open");
+    $("#dpToggle").setAttribute("aria-expanded", String(open));
+  });
+
+  updateWeapons();
+  updateDaedala();
   refresh();
 }
 
