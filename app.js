@@ -259,7 +259,7 @@ function buildGodFilter() {
     chip.style.setProperty("--c", g.color);
     chip.setAttribute("aria-pressed", "true");
     chip.dataset.god = g.id;
-    chip.innerHTML = `<img src="${iconSrc(g.symbol)}" alt="">${g.name}`;
+    chip.innerHTML = `<img src="${iconSrc(g.symbol)}" alt="">`;
     chip.title = `Show / hide ${g.name} boons`;
     chip.addEventListener("click", () => {
       if (state.visibleGods.has(g.id)) state.visibleGods.delete(g.id);
@@ -277,17 +277,28 @@ function updateGodFilter() {
 }
 
 /* ------------------------ weapon + daedala ------------------------------ */
+// After a weapon is picked, the row collapses to that one icon.
+// Tap the active weapon icon to open the row again and pick another.
+let weaponsLocked = false;
+
 function buildWeapons() {
   const wrap = $("#dpWeapons");
   for (const w of WEAPONS) {
     const btn = el("button", "wpn");
     btn.type = "button";
     btn.dataset.id = w.id;
-    btn.title = `${w.name} — Attack ${w.atk[0] === w.atk[1] ? w.atk[0] : w.atk[0] + "–" + w.atk[1]}, Special ${w.sp}`;
-    btn.innerHTML = `<img src="${iconSrc(w.icon)}" alt="">${w.name}`;
+    btn.dataset.title = `${w.name} — Attack ${w.atk[0] === w.atk[1] ? w.atk[0] : w.atk[0] + "–" + w.atk[1]}, Special ${w.sp}`;
+    btn.title = btn.dataset.title;
+    btn.innerHTML = `<img src="${iconSrc(w.icon)}" alt="">`;
     btn.addEventListener("click", () => {
+      if (weaponsLocked && state.weapon === w.id) {
+        weaponsLocked = false;
+        updateWeapons();
+        return;
+      }
       if (state.weapon === w.id) return;
       state.weapon = w.id;
+      weaponsLocked = true;
       updateWeapons();
       updateDaedala();
       refresh();
@@ -298,7 +309,10 @@ function buildWeapons() {
 
 function updateWeapons() {
   for (const btn of $("#dpWeapons").children) {
-    btn.setAttribute("aria-pressed", String(state.weapon === btn.dataset.id));
+    const isSel = state.weapon === btn.dataset.id;
+    btn.setAttribute("aria-pressed", String(isSel));
+    btn.hidden = weaponsLocked && !isSel;
+    btn.title = weaponsLocked && isSel ? btn.dataset.title + " — tap to change weapon" : btn.dataset.title;
   }
 }
 
@@ -452,62 +466,6 @@ function updateLanes() {
       tile.classList.toggle("dim", dim);
       tile.classList.toggle("candidate", !isSel && cands.has(id) && !dim);
       tile.querySelector(".sel-mark").style.display = isSel ? "flex" : "none";
-    }
-  }
-}
-
-/* ---------------------------- loadout ---------------------------------- */
-function renderLoadout() {
-  const selStrip = $("#selectedStrip");
-  const duoStrip = $("#duoStrip");
-  selStrip.innerHTML = "";
-  duoStrip.innerHTML = "";
-
-  const sel = [...state.selected];
-  if (sel.length === 0) {
-    selStrip.appendChild(el("span", "empty-note", "No boons selected. Click a boon to add it to your run."));
-  } else {
-    for (const id of sel) {
-      const b = BOON_BY_ID[id];
-      const g = GOD_BY_ID[b.god];
-      const { r, l } = bonusOf(id);
-      const chip = el("div", "chip");
-      chip.style.setProperty("--c", g.color);
-      chip.title = b.name + (r > 0 || l > 1 ? ` (${RARITIES[r]}, Lv ${l})` : "");
-      chip.innerHTML =
-        `<img src="${iconSrc(b.icon)}" alt="">` +
-        `<span class="chip-name">${b.name}</span>` +
-        (r > 0 || l > 1
-          ? `<span class="chip-lv" style="color:${RARITY_COLOR[RARITIES[r]]}">${RARITY_SHORT[RARITIES[r]]}${l > 1 ? l : ""}</span>`
-          : "") +
-        `<span class="chip-x" title="Remove">×</span>`;
-      chip.querySelector(".chip-x").addEventListener("click", e => {
-        e.stopPropagation();
-        toggleSelect(id);
-      });
-      chip.addEventListener("click", () => {
-        const tile = document.querySelector(`.boon[data-id="${id}"]`);
-        if (tile) openPop(id, tile);
-      });
-      selStrip.appendChild(chip);
-    }
-  }
-
-  const ready = readyDuos(state.selected);
-  $("#btnClear").hidden = sel.length === 0;
-
-  if (ready.length === 0) {
-    duoStrip.appendChild(el("span", "empty-note", "No ready duos yet. Combine boons from two gods to unlock one."));
-  } else {
-    for (const d of ready) {
-      const chip = el("div", "duo-chip");
-      chip.title = d.effect;
-      chip.innerHTML =
-        `<img src="${iconSrc(d.icon)}" alt="">` +
-        `<span class="chip-name">${d.name}</span>` +
-        `<span class="chip-gods">${d.gods.map(gid =>
-          `<img src="${iconSrc(GOD_BY_ID[gid].symbol)}" title="${GOD_BY_ID[gid].name}">`).join("")}</span>`;
-      duoStrip.appendChild(chip);
     }
   }
 }
@@ -689,7 +647,6 @@ function rebuildPopDuoList(bid) {
 function refresh() {
   updateGodFilter();
   updateLanes();
-  renderLoadout();
   renderDamage();
 }
 
@@ -699,23 +656,22 @@ function init() {
   buildWeapons();
   buildLanes();
 
-  $("#btnAll").addEventListener("click", () => {
-    state.visibleGods = new Set(GODS.map(g => g.id));
-    refresh();
-  });
-  $("#btnNone").addEventListener("click", () => {
-    state.visibleGods = new Set();
-    refresh();
-  });
-  $("#btnClear").addEventListener("click", () => {
-    state.selected.clear();
-    refresh();
-  });
-
   const search = $("#search");
+  const searchClear = $("#searchClear");
+  const syncSearchClear = () => {
+    searchClear.hidden = search.value.length === 0;
+  };
   search.addEventListener("input", () => {
     state.search = search.value;
+    syncSearchClear();
     updateLanes();
+  });
+  searchClear.addEventListener("click", () => {
+    search.value = "";
+    state.search = "";
+    syncSearchClear();
+    updateLanes();
+    search.focus();
   });
 
   $("#popClose").addEventListener("click", () => $("#boonPop").hidePopover());

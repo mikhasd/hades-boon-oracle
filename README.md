@@ -48,15 +48,16 @@ Notes:
 
 ## How to use it
 
-1. **Filter your gods.** At the top, tap the gods you have met this run.
-   Hidden gods remove their whole lane to keep the list short.
-   Use **All** / **None** to reset. You can also type in **Search**.
+1. **Filter your gods.** At the top, tap the god symbols for the gods
+   you have met this run. A hidden god removes its whole lane to keep
+   the list short. Tap a god again to show it. You can also type in
+   **Search**; the × in the box clears the term.
 2. **Read a boon.** Click any boon icon. A popover opens with the name,
    the god, the ability slot, the effect, its damage, and every Duo Boon
    it can help unlock.
 3. **Add it to your run.** Press **Select boon** in the popover.
-   Selected boons appear in the **Your boons** bar at the bottom.
-   Press **×** on a chip, or **Clear all**, to remove them.
+   Selected boons get a gold border and a ✓ on their tile. Press the
+   button again (it then reads **✓ Selected**) to remove a boon.
 4. **Tune the boon.** In the popover, set the **rarity**
    (common / rare / epic / heroic) and the **level** (1–6, the number
    of Poms of Power on it). Both change the damage shown in the
@@ -66,10 +67,9 @@ Notes:
 5. **Follow the glow.** Once you hold a boon, the app lights up the other
    boons that would complete a Duo Boon with it. Pick those to set up
    strong duos.
-6. **Watch the ready duos.** The **Ready duos** bar lists every Duo Boon
-   you can activate right now from your selected boons. Duos that change
-   damage (for example **Heart Rend**, **+350% critical damage**) apply
-   to the calculator automatically.
+6. **Watch the ready duos.** When your picks complete a Duo Boon, a
+   toast names it. Duos that change damage (for example **Heart Rend**,
+   **+350% critical damage**) apply to the calculator automatically.
 
 ## Damage calculator
 
@@ -90,8 +90,10 @@ damage = (weapon base + flat boon adds) × (1 + sum of % boon bonuses)
 
 Critical hits add the crit bonus on top of the normal damage.
 
-- **Weapon**: choose one of the six weapons. The **Daedala** row shows
-  only the Daedalus Hammer upgrades for that weapon. You can hold at
+- **Weapon**: choose one of the six weapons by icon. The row collapses
+  to the chosen weapon to save space; tap the active weapon icon to
+  open the row again and pick another. The **Daedala** row shows only
+  the Daedalus Hammer upgrades for that weapon. You can hold at
   most 2 Daedala per run, and some exclude each other (the app removes
   the replaced one and tells you). Your Daedala picks are kept per
   weapon, so switching weapons does not lose them. Switching weapons
