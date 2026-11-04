@@ -16,6 +16,36 @@ python3 -m http.server 8000
 
 Everything is local. No internet is needed once the icons are present.
 
+## Install as an app (offline)
+
+The app is a progressive web app. It runs from the cache after the
+first visit, so it works with no network at all.
+
+1. Serve the folder over http (or https on a phone):
+
+   ```
+   python3 -m http.server 8000
+   # then open http://localhost:8000
+   ```
+
+2. On the first visit the app stores itself: the page, the styles,
+   the logic, the data, and all 249 icons.
+3. After that you can close the network and the app still loads.
+   Reload the page to be sure it comes from the cache.
+4. To install:
+   - **Android / Chrome**: menu → **Install app** (or the install icon
+     in the address bar).
+   - **Desktop Chrome / Edge**: the install icon in the address bar.
+   - **iOS / Safari**: Share → **Add to Home Screen**.
+
+Notes:
+
+- The service worker only works over http(s). Opening `index.html`
+  straight from disk (file://) still works as a plain page, but it
+  cannot cache for offline use.
+- To force a fresh cache (for example after a data update), change
+  `VERSION` in `sw.js`. Old caches are removed on update.
+
 ## How to use it
 
 1. **Filter your gods.** At the top, tap the gods you have met this run.
@@ -111,5 +141,10 @@ index.html   page markup, including the damage panel
 style.css    Hades-themed styling
 app.js       selection, highlighting, popover, damage math
 data.js      generated boon / duo / weapon / daedala data (source: hades.fandom.com)
+sw.js        service worker: offline cache
+manifest.webmanifest  web app manifest
+icon.svg     app icon source (gold flame)
+icon-*.png   rendered app icons (192, 512, maskable 512)
+apple-touch-icon.png  iOS home-screen icon (180)
 icons/       249 boon, duo, god, weapon, and daedala icons (WebP)
 ```

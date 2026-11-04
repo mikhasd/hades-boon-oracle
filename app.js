@@ -744,3 +744,11 @@ function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
+// PWA: register the service worker for offline use.
+// Service workers need http(s); on file:// this does nothing.
+if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {});
+  });
+}
