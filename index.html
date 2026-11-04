@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hades — Boon Oracle</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ===================== TOP BAR ===================== -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🜏</span>
+      <div class="brand-text">
+        <h1>Boon Oracle</h1>
+        <p class="brand-sub">Hades duo-boon picker</p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label class="search">
+        <span class="search-ico">⌕</span>
+        <input id="search" type="search" placeholder="Search a boon…" autocomplete="off" spellcheck="false" />
+      </label>
+
+      <div class="god-filter" id="godFilter" role="group" aria-label="Filter by god"></div>
+
+      <div class="filter-actions">
+        <button id="btnAll" class="mini-btn" type="button">All</button>
+        <button id="btnNone" class="mini-btn" type="button">None</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== LANES ===================== -->
+  <main class="lanes" id="lanes"></main>
+
+  <div class="legend" id="legend">
+    <span class="legend-item"><i class="mark duo-mark">◆</i> Can form a Duo Boon</span>
+    <span class="legend-item"><i class="mark cand-mark"></i> Picking this completes a Duo</span>
+    <span class="legend-item"><i class="mark sel-mark"></i> In your run</span>
+  </div>
+
+  <!-- ===================== LOADOUT (bottom) ===================== -->
+  <footer class="loadout" id="loadout">
+    <div class="loadout-row">
+      <span class="loadout-label">Your boons</span>
+      <div class="loadout-strip" id="selectedStrip"></div>
+      <button id="btnClear" class="mini-btn ghost" type="button" hidden>Clear all</button>
+    </div>
+    <div class="loadout-row">
+      <span class="loadout-label duo-label">Ready duos</span>
+      <div class="loadout-strip" id="duoStrip"></div>
+    </div>
+  </footer>
+
+  <!-- ===================== BOON POPOVER ===================== -->
+  <div id="boonPop" popover class="boon-pop">
+    <button class="pop-close" id="popClose" type="button" aria-label="Close">×</button>
+    <div class="pop-head">
+      <img id="popIcon" class="pop-icon" alt="" />
+      <div class="pop-title">
+        <h2 id="popName"></h2>
+        <div class="pop-meta">
+          <span id="popGod" class="pop-god"></span>
+          <span id="popSlot" class="pop-slot"></span>
+        </div>
+      </div>
+      <button id="popSelect" class="select-btn" type="button"></button>
+    </div>
+    <p id="popDesc" class="pop-desc"></p>
+    <div class="pop-duos" id="popDuoList"></div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
