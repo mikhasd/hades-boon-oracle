@@ -16,70 +16,80 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ===================== TOP BAR ===================== -->
+  <!-- ===================== HEADER (brand) ===================== -->
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">🜏</span>
+      <span class="brand-mark" aria-hidden="true">🜏</span>
       <div class="brand-text">
         <h1>Boon Oracle</h1>
         <p class="brand-sub">Hades duo-boon picker</p>
       </div>
     </div>
-
-    <div class="controls">
-      <label class="search">
-        <span class="search-ico">⌕</span>
-        <input id="search" type="search" placeholder="Search a boon…" autocomplete="off" spellcheck="false" />
-        <button type="button" class="search-clear" id="searchClear" aria-label="Clear search" hidden>×</button>
-      </label>
-
-      <div class="god-filter" id="godFilter" role="group" aria-label="Filter by god"></div>
-    </div>
   </header>
 
-  <!-- ===================== DAMAGE CALCULATOR ===================== -->
-  <section class="dmgpanel" id="dmgpanel" aria-label="Damage calculator">
-    <div class="dp-weapon-row">
-      <span class="dp-label">Weapon</span>
-      <div class="dp-weapons" id="dpWeapons" role="group" aria-label="Choose weapon"></div>
-    </div>
-    <div class="dp-daedala-row">
-      <span class="dp-label">Daedala</span>
-      <div class="dp-daedala" id="dpDaedala" role="group" aria-label="Daedalus upgrades for the current weapon"></div>
-    </div>
-    <div class="dp-readout">
-      <div class="dp-stat" id="dpAttack">
-        <span class="dp-stat-name">⚔ Attack</span>
-        <span class="dp-stat-val" id="dpAttackVal">–</span>
-        <span class="dp-stat-note" id="dpAttackNote"></span>
-      </div>
-      <div class="dp-stat" id="dpSpecial">
-        <span class="dp-stat-name">✦ Special</span>
-        <span class="dp-stat-val" id="dpSpecialVal">–</span>
-        <span class="dp-stat-note" id="dpSpecialNote"></span>
-      </div>
-      <div class="dp-stat" id="dpCast">
-        <span class="dp-stat-name">☄ Cast</span>
-        <span class="dp-stat-val" id="dpCastVal">–</span>
-        <span class="dp-stat-note" id="dpCastNote"></span>
-      </div>
-      <div class="dp-stat dp-stat-crit">
-        <span class="dp-stat-name">☠ Crit bonus</span>
-        <span class="dp-stat-val" id="dpCritVal">+200%</span>
-        <span class="dp-stat-note">on critical hits</span>
+  <div class="page">
+    <!-- ===================== DAMAGE READOUT ===================== -->
+    <section class="dmgpanel" id="dmgpanel" aria-label="Damage calculator">
+      <div class="dp-readout">
+        <div class="dp-stat" id="dpAttack">
+          <span class="dp-stat-name">⚔ Attack</span>
+          <span class="dp-stat-val" id="dpAttackVal">–</span>
+          <span class="dp-stat-note" id="dpAttackNote"></span>
+        </div>
+        <div class="dp-stat" id="dpSpecial">
+          <span class="dp-stat-name">✦ Special</span>
+          <span class="dp-stat-val" id="dpSpecialVal">–</span>
+          <span class="dp-stat-note" id="dpSpecialNote"></span>
+        </div>
+        <div class="dp-stat" id="dpCast">
+          <span class="dp-stat-name">☄ Cast</span>
+          <span class="dp-stat-val" id="dpCastVal">–</span>
+          <span class="dp-stat-note" id="dpCastNote"></span>
+        </div>
+        <div class="dp-stat dp-stat-crit">
+          <span class="dp-stat-name">☠ Crit bonus</span>
+          <span class="dp-stat-val" id="dpCritVal">+200%</span>
+          <span class="dp-stat-note">on critical hits</span>
+        </div>
       </div>
       <button type="button" class="dp-toggle" id="dpToggle" aria-expanded="false">breakdown</button>
+      <div class="dp-breakdown" id="dpBreakdown"></div>
+    </section>
+
+    <!-- ===================== WEAPON ===================== -->
+    <section class="wpn-section" aria-label="Weapon">
+      <span class="sec-label">Weapon</span>
+      <div class="dp-weapons" id="dpWeapons" role="group" aria-label="Choose weapon"></div>
+    </section>
+
+    <!-- ===================== SELECTED BOONS ===================== -->
+    <section class="sel-section" aria-label="Your boons">
+      <div class="sel-head">
+        <span class="sec-label">Your boons</span>
+        <button type="button" class="new-boon-btn" id="btnNewBoon">＋ New boon</button>
+      </div>
+      <div class="sel-strip" id="selectedStrip"></div>
+    </section>
+  </div>
+
+  <!-- ===================== PICKER OVERLAY ===================== -->
+  <div class="picker" id="picker" hidden role="dialog" aria-modal="true" aria-label="Pick a boon">
+    <div class="picker-backdrop" id="pickerBackdrop"></div>
+    <div class="picker-panel">
+      <div class="picker-head">
+        <h2>Pick a boon</h2>
+        <button type="button" class="picker-close" id="pickerClose" aria-label="Close">×</button>
+      </div>
+      <div class="picker-filter">
+        <div class="god-filter" id="godFilter" role="group" aria-label="Filter by god"></div>
+        <div class="legend">
+          <span class="legend-item"><i class="mark duo-mark" aria-hidden="true">◆</i> Can form a Duo Boon</span>
+          <span class="legend-item"><i class="mark cand-mark" aria-hidden="true"></i> Completes a Duo</span>
+          <span class="legend-item"><i class="mark dae-mark" aria-hidden="true">✓</i> Selected Daedala</span>
+        </div>
+      </div>
+      <div class="picker-lanes" id="lanes"></div>
     </div>
-    <div class="dp-breakdown" id="dpBreakdown"></div>
-  </section>
-
-  <!-- ===================== LANES ===================== -->
-  <main class="lanes" id="lanes"></main>
-
-  <div class="legend" id="legend">
-    <span class="legend-item"><i class="mark duo-mark">◆</i> Can form a Duo Boon</span>
-    <span class="legend-item"><i class="mark cand-mark"></i> Picking this completes a Duo</span>
-    <span class="legend-item"><i class="mark sel-mark"></i> In your run</span>
   </div>
 
   <!-- ===================== BOON POPOVER ===================== -->

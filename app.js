@@ -3,6 +3,13 @@
    Picks boons, tracks your run, and highlights the picks that unlock
    the strongest Duo Boons. Includes an Attack / Special / Cast damage
    calculator driven by weapon, Daedala, and selected boons (rarity + level).
+
+   Mobile-first layout:
+     1. header (brand)
+     2. damage readout + collapsible breakdown
+     3. weapon icons (row collapses to the pick; tap it to change)
+     4. selected boons strip + "New boon" button
+     5. picker overlay: god filter + god lanes + Daedalus lane
    ========================================================================= */
 "use strict";
 
@@ -60,14 +67,13 @@ function entryLine(e, v) {
 /* ---------------------------- state ------------------------------------ */
 const state = {
   selected: new Set(),          // boon ids in your run
-  visibleGods: new Set(GODS.map(g => g.id)),
-  search: "",
   weapon: "blade",              // current weapon id
   daedala: {                    // per-weapon selected daedala ids
     blade: new Set(), spear: new Set(), bow: new Set(),
     shield: new Set(), fists: new Set(), rail: new Set(),
   },
   bonus: {},                    // boon id -> { r: 0..3, l: 1..6 }
+  godFilter: null,              // picker: null = all gods, Set = only these
 };
 const bonusOf = id => state.bonus[id] || (state.bonus[id] = { r: 0, l: 1 });
 
@@ -251,20 +257,32 @@ function toast(msg) {
 }
 
 /* ---------------------------- god filter ------------------------------- */
+/* Picker filter. Starts with all gods shown. Tapping a god shows only
+   that god; tapping more gods adds them to the view; removing the last
+   one shows all again. Gods of already-selected boons are shown by
+   default when the picker opens. */
 function buildGodFilter() {
   const wrap = $("#godFilter");
   for (const g of GODS) {
     const chip = el("button", "god-chip");
     chip.type = "button";
     chip.style.setProperty("--c", g.color);
-    chip.setAttribute("aria-pressed", "true");
     chip.dataset.god = g.id;
     chip.innerHTML = `<img src="${iconSrc(g.symbol)}" alt="">`;
-    chip.title = `Show / hide ${g.name} boons`;
+    chip.title = g.name;
     chip.addEventListener("click", () => {
-      if (state.visibleGods.has(g.id)) state.visibleGods.delete(g.id);
-      else state.visibleGods.add(g.id);
-      refresh();
+      let set = state.godFilter;
+      if (set === null) {
+        set = new Set([g.id]);                       // first tap: solo
+      } else if (set.has(g.id)) {
+        set.delete(g.id);
+        if (set.size === 0) set = null;              // none left: show all
+      } else {
+        set.add(g.id);                               // add more
+      }
+      state.godFilter = set;
+      updateGodFilter();
+      updateLanes();
     });
     wrap.appendChild(chip);
   }
@@ -272,11 +290,22 @@ function buildGodFilter() {
 
 function updateGodFilter() {
   for (const chip of $("#godFilter").children) {
-    chip.setAttribute("aria-pressed", state.visibleGods.has(chip.dataset.god) ? "true" : "false");
+    const on = state.godFilter === null || state.godFilter.has(chip.dataset.god);
+    chip.setAttribute("aria-pressed", String(on));
+    chip.classList.toggle("dimmed", !on);
   }
 }
 
-/* ------------------------ weapon + daedala ------------------------------ */
+function defaultGodFilter() {
+  const selGods = new Set([...state.selected].map(id => BOON_BY_ID[id].god));
+  if (state.godFilter === null) {
+    state.godFilter = selGods.size ? selGods : null;
+  } else {
+    for (const g of selGods) state.godFilter.add(g);
+  }
+}
+
+/* ------------------------------ weapons -------------------------------- */
 // After a weapon is picked, the row collapses to that one icon.
 // Tap the active weapon icon to open the row again and pick another.
 let weaponsLocked = false;
@@ -300,8 +329,8 @@ function buildWeapons() {
       state.weapon = w.id;
       weaponsLocked = true;
       updateWeapons();
-      updateDaedala();
-      refresh();
+      fillDaedalaLane();
+      renderDamage();
     });
     wrap.appendChild(btn);
   }
@@ -316,29 +345,59 @@ function updateWeapons() {
   }
 }
 
+/* --------------------------- daedalus lane ----------------------------- */
+/* Daedalus is a lane inside the picker (like a god): the Daedalus Hammer
+   upgrades for the current weapon. Selected Daedala stay visible with a
+   check so they can be removed; the max-2 and exclusivity rules apply. */
+function buildDaedalusLane() {
+  const lane = el("section", "lane lane-daedalus");
+  lane.dataset.god = "daedalus";
+  const head = el("header", "lane-head");
+  head.innerHTML =
+    `<span class="lane-glyph" aria-hidden="true">⚒</span>` +
+    `<h2>Daedalus</h2>` +
+    `<span class="count" id="daedaCount"></span>`;
+  const grid = el("div", "boon-grid");
+  lane.appendChild(head);
+  lane.appendChild(grid);
+  return lane;
+}
+
+function fillDaedalaLane() {
+  const lane = $("#lanes .lane-daedalus");
+  if (!lane) return;
+  const grid = lane.querySelector(".boon-grid");
+  grid.innerHTML = "";
+  for (const dd of DAEDALA.filter(d => d.weapon === state.weapon)) {
+    const tile = el("button", "dae-tile");
+    tile.type = "button";
+    tile.dataset.id = dd.id;
+    tile.title = dd.desc;
+    tile.innerHTML =
+      `<img src="${iconSrc(dd.icon)}" alt="">` +
+      `<span class="dae-name">${dd.name}</span>` +
+      `<span class="sel-mark" aria-hidden="true">✓</span>`;
+    tile.addEventListener("click", () => toggleDaedala(dd));
+    grid.appendChild(tile);
+  }
+  $("#daedaCount").textContent = WEAPON_BY_ID[state.weapon].name;
+  syncDaedalaLane();
+}
+
+function syncDaedalaLane() {
+  const lane = $("#lanes .lane-daedalus");
+  if (!lane) return;
+  const set = state.daedala[state.weapon];
+  for (const t of lane.querySelectorAll(".dae-tile")) {
+    const isSel = set.has(t.dataset.id);
+    t.classList.toggle("selected", isSel);
+    t.setAttribute("aria-pressed", String(isSel));
+    t.querySelector(".sel-mark").style.display = isSel ? "flex" : "none";
+  }
+}
+
 function totalDaedala() {
   return Object.values(state.daedala).reduce((n, s) => n + s.size, 0);
-}
-
-function buildDaedala() {
-  const wrap = $("#dpDaedala");
-  wrap.innerHTML = "";
-  for (const dd of DAEDALA.filter(d => d.weapon === state.weapon)) {
-    const btn = el("button", "dae");
-    btn.type = "button";
-    btn.dataset.id = dd.id;
-    btn.title = dd.desc;
-    btn.innerHTML = `<img src="${iconSrc(dd.icon)}" alt=""><span>${dd.name}</span>`;
-    btn.addEventListener("click", () => toggleDaedala(dd));
-    wrap.appendChild(btn);
-  }
-}
-
-function updateDaedala() {
-  buildDaedala();
-  for (const btn of $("#dpDaedala").children) {
-    btn.setAttribute("aria-pressed", String(state.daedala[state.weapon].has(btn.dataset.id)));
-  }
 }
 
 function toggleDaedala(dd) {
@@ -364,7 +423,7 @@ function toggleDaedala(dd) {
     set.add(dd.id);
     if (dropped.length) toast(`Replaced: ${dropped.join(", ")}`);
   }
-  updateDaedala();
+  syncDaedalaLane();
   renderDamage();
 }
 
@@ -410,7 +469,7 @@ function renderBreakdown(d) {
     : `<div class="bd-row bd-empty">Pick boons or Daedala to see what changes your damage.</div>`;
 }
 
-/* ---------------------------- lanes ------------------------------------ */
+/* ------------------------------ lanes ----------------------------------- */
 function buildLanes() {
   const lanes = $("#lanes");
   for (const g of GODS) {
@@ -432,67 +491,123 @@ function buildLanes() {
       tile.type = "button";
       tile.dataset.id = b.id;
       tile.title = b.name;
-      tile.style.anchorName = "--tile-" + b.id;
+      tile.style.anchorName = "--pop-" + b.id;
       tile.innerHTML =
         `<img src="${iconSrc(b.icon)}" alt="${b.name}">` +
-        `<span class="duo-mark" aria-hidden="true">◆</span>` +
-        `<span class="sel-mark" aria-hidden="true">✓</span>`;
+        `<span class="duo-mark" aria-hidden="true">◆</span>`;
       if (b.duoCapable) tile.classList.add("duo");
-      tile.querySelector(".sel-mark").style.display = "none";
       tile.addEventListener("click", () => openPop(b.id, tile));
       grid.appendChild(tile);
     }
     lane.appendChild(grid);
     lanes.appendChild(lane);
   }
+  lanes.appendChild(buildDaedalusLane());
 }
 
+/* Shows/hides lanes and tiles. Picked boons leave the list; a god lane
+   hides when it has nothing left to offer. The Daedalus lane is always
+   visible. */
 function updateLanes() {
   const cands = candidateSet(state.selected);
-  const q = state.search.trim().toLowerCase();
-
   for (const lane of $("#lanes").children) {
     const god = lane.dataset.god;
-    lane.classList.toggle("hidden", !state.visibleGods.has(god));
-    if (!state.visibleGods.has(god)) continue;
-
+    if (god === "daedalus") {
+      lane.classList.remove("hidden");
+      continue;
+    }
+    const inFilter = state.godFilter === null || state.godFilter.has(god);
+    let unseen = 0;
     for (const tile of lane.querySelectorAll(".boon")) {
       const id = tile.dataset.id;
-      const b = BOON_BY_ID[id];
       const isSel = state.selected.has(id);
-      const dim = q.length > 0 && !b.name.toLowerCase().includes(q);
-
-      tile.classList.toggle("selected", isSel);
-      tile.classList.toggle("dim", dim);
-      tile.classList.toggle("candidate", !isSel && cands.has(id) && !dim);
-      tile.querySelector(".sel-mark").style.display = isSel ? "flex" : "none";
+      tile.hidden = isSel;
+      tile.classList.toggle("candidate", !isSel && cands.has(id));
+      if (!isSel) unseen++;
     }
+    lane.classList.toggle("hidden", !(inFilter && unseen > 0));
+    lane.querySelector(".count").textContent =
+      unseen + " boon" + (unseen === 1 ? "" : "s");
+  }
+  syncDaedalaLane();
+}
+
+/* --------------------------- selected strip ---------------------------- */
+function renderSelStrip() {
+  const strip = $("#selectedStrip");
+  strip.innerHTML = "";
+  const sel = [...state.selected];
+  if (sel.length === 0) {
+    strip.appendChild(el("span", "empty-note", "No boons yet. Pick one to start your run."));
+    return;
+  }
+  for (const id of sel) {
+    const b = BOON_BY_ID[id];
+    const g = GOD_BY_ID[b.god];
+    const { r, l } = bonusOf(id);
+    const chip = el("button", "chip");
+    chip.type = "button";
+    chip.style.setProperty("--c", g.color);
+    chip.style.anchorName = "--pop-" + id;
+    chip.title = b.name + (r > 0 || l > 1 ? ` (${RARITIES[r]}, Lv ${l})` : "");
+    chip.dataset.id = id;
+    chip.innerHTML =
+      `<img src="${iconSrc(b.icon)}" alt="">` +
+      `<span class="chip-name">${b.name}</span>` +
+      (r > 0 || l > 1
+        ? `<span class="chip-lv" style="color:${RARITY_COLOR[RARITIES[r]]}">${RARITY_SHORT[RARITIES[r]]}${l > 1 ? l : ""}</span>`
+        : "") +
+      `<span class="chip-x" title="Remove" aria-label="Remove">×</span>`;
+    chip.addEventListener("click", (ev) => {
+      if (ev.target.closest(".chip-x")) {
+        toggleSelect(id);
+        return;
+      }
+      openPop(id, chip);
+    });
+    strip.appendChild(chip);
   }
 }
 
 /* ---------------------------- selection -------------------------------- */
 function toggleSelect(id) {
-  const b = BOON_BY_ID[id];
   if (state.selected.has(id)) {
     state.selected.delete(id);
   } else {
     state.selected.add(id);
   }
   refresh();
-  // keep the popover in sync if it is open for this boon
+  // the boon popover closes after a pick: the tile left the list (or the
+  // chip that anchors it was re-rendered)
   const pop = $("#boonPop");
-  if (pop.matches(":popover-open") && pop.dataset.bid === id) {
-    syncPopTuning(id);
-    syncPopDmg(id);
-    syncSelectButton(id);
-    rebuildPopDuoList(id);
-  }
+  if (pop.matches(":popover-open") && pop.dataset.bid === id) pop.hidePopover();
   const ready = readyDuos(state.selected);
   if (ready.length) toast(`${ready.length} duo${ready.length > 1 ? "s" : ""} ready: ${ready.map(d => d.name).join(", ")}`);
 }
 
+/* ------------------------------ picker --------------------------------- */
+function openPicker() {
+  defaultGodFilter();
+  updateGodFilter();
+  updateLanes();
+  const picker = $("#picker");
+  picker.hidden = false;
+  requestAnimationFrame(() => picker.classList.add("open"));
+  document.body.classList.add("picker-open");
+  $("#pickerClose").focus();
+}
+
+function closePicker() {
+  const picker = $("#picker");
+  if (picker.hidden) return;
+  picker.classList.remove("open");
+  document.body.classList.remove("picker-open");
+  setTimeout(() => { picker.hidden = true; }, 180);
+  $("#btnNewBoon").focus();
+}
+
 /* ---------------------------- popover ---------------------------------- */
-function openPop(bid, tile) {
+function openPop(bid, anchorEl) {
   const pop = $("#boonPop");
   const b = BOON_BY_ID[bid];
   const g = GOD_BY_ID[b.god];
@@ -512,8 +627,8 @@ function openPop(bid, tile) {
   syncSelectButton(bid);
   rebuildPopDuoList(bid);
 
-  if (CSS.supports("anchor-name", "--x")) {
-    pop.style.positionAnchor = "--tile-" + bid;
+  if (CSS.supports("anchor-name", "--x") && anchorEl && anchorEl.style.anchorName) {
+    pop.style.positionAnchor = anchorEl.style.anchorName;
     pop.style.positionArea = "bottom top";
   }
   pop.showPopover();
@@ -553,6 +668,21 @@ function syncPopTuning(bid) {
   $("#lvDown").title = locked ? "Cannot be levelled" : "Level down";
   $("#lvUp").title = locked ? "Cannot be levelled" : "Level up";
   $("#popLevelLock").hidden = !locked;
+  // keep the strip chip badge in sync without rebuilding the strip
+  // (rebuilding would detach the popover's anchor element)
+  const chip = document.querySelector(`#selectedStrip .chip[data-id="${bid}"]`);
+  if (chip) {
+    const badge = chip.querySelector(".chip-lv");
+    if (r > 0 || l > 1) {
+      if (!badge) chip.querySelector(".chip-x").before(el("span", "chip-lv"));
+      const bEl = chip.querySelector(".chip-lv");
+      bEl.textContent = RARITY_SHORT[RARITIES[r]] + (l > 1 ? l : "");
+      bEl.style.color = RARITY_COLOR[RARITIES[r]];
+    } else if (badge) {
+      badge.remove();
+    }
+    chip.title = b.name + (r > 0 || l > 1 ? ` (${RARITIES[r]}, Lv ${l})` : "");
+  }
 }
 
 function syncPopDmg(bid) {
@@ -581,8 +711,8 @@ function syncSelectButton(bid) {
 }
 
 function duoStatusFor(duo, sel, bid) {
-  // returns { level: 'ready'|'soon'|'part', rows: [{gods, label, state}] }
-  const rows = duo.req.map((group, i) => {
+  // returns { level: 'ready'|'soon'|'part', rows: [{gods, met, byThis}] }
+  const rows = duo.req.map((group) => {
     const met = groupMet(group, sel);
     const byThis = !met && group.includes(bid);
     // gods represented in this group (for the symbol row)
@@ -645,9 +775,9 @@ function rebuildPopDuoList(bid) {
 
 /* ---------------------------- refresh ---------------------------------- */
 function refresh() {
-  updateGodFilter();
-  updateLanes();
   renderDamage();
+  renderSelStrip();
+  updateLanes();
 }
 
 /* ---------------------------- init ------------------------------------- */
@@ -655,23 +785,13 @@ function init() {
   buildGodFilter();
   buildWeapons();
   buildLanes();
+  fillDaedalaLane();
 
-  const search = $("#search");
-  const searchClear = $("#searchClear");
-  const syncSearchClear = () => {
-    searchClear.hidden = search.value.length === 0;
-  };
-  search.addEventListener("input", () => {
-    state.search = search.value;
-    syncSearchClear();
-    updateLanes();
-  });
-  searchClear.addEventListener("click", () => {
-    search.value = "";
-    state.search = "";
-    syncSearchClear();
-    updateLanes();
-    search.focus();
+  $("#btnNewBoon").addEventListener("click", openPicker);
+  $("#pickerClose").addEventListener("click", closePicker);
+  $("#pickerBackdrop").addEventListener("click", closePicker);
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !$("#picker").hidden) closePicker();
   });
 
   $("#popClose").addEventListener("click", () => $("#boonPop").hidePopover());
@@ -695,7 +815,7 @@ function init() {
   });
 
   updateWeapons();
-  updateDaedala();
+  updateGodFilter();
   refresh();
 }
 
