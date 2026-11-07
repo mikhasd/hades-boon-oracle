@@ -4,7 +4,7 @@
  * works offline after the first visit. Bump VERSION to re-cache. */
 "use strict";
 
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = "boon-oracle-" + VERSION;
 
 // App shell + PWA icons.

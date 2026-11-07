@@ -46,34 +46,60 @@ Notes:
 - To force a fresh cache (for example after a data update), change
   `VERSION` in `sw.js`. Old caches are removed on update.
 
+## Layout
+
+The page is mobile-first. From top to bottom:
+
+1. **Header** — the brand mark. The title text only appears on large
+   devices.
+2. **Damage panel** — Attack, Special, Cast, and Crit bonus, plus a
+   collapsible **breakdown** of every modifier.
+3. **Weapon** — the six weapons as icons. The row collapses to the
+   chosen weapon; tap the active icon to pick another.
+4. **Your boons** — the boons of your run as chips, plus the
+   **+ New boon** button.
+
+On a phone the picker opens as a full-screen overlay; on a large device
+it is a centered dialog with the lanes in two columns.
+
 ## How to use it
 
-1. **Filter your gods.** At the top, tap the god symbols for the gods
-   you have met this run. A hidden god removes its whole lane to keep
-   the list short. Tap a god again to show it. You can also type in
-   **Search**; the × in the box clears the term.
-2. **Read a boon.** Click any boon icon. A popover opens with the name,
-   the god, the ability slot, the effect, its damage, and every Duo Boon
-   it can help unlock.
-3. **Add it to your run.** Press **Select boon** in the popover.
-   Selected boons get a gold border and a ✓ on their tile. Press the
-   button again (it then reads **✓ Selected**) to remove a boon.
-4. **Tune the boon.** In the popover, set the **rarity**
-   (common / rare / epic / heroic) and the **level** (1–6, the number
-   of Poms of Power on it). Both change the damage shown in the
-   popover and in the calculator. Boons that cannot take Poms
-   (all Hermes boons, legendary boons, some effect-only boons) show a
-   **fixed** badge; their level stays at 1.
-5. **Follow the glow.** Once you hold a boon, the app lights up the other
-   boons that would complete a Duo Boon with it. Pick those to set up
-   strong duos.
-6. **Watch the ready duos.** When your picks complete a Duo Boon, a
+1. **Pick your weapon.** Tap a weapon icon. The row collapses to that
+   weapon to save space; tap the active icon to change it.
+2. **Open the picker.** Press **+ New boon**. A god filter sits on top
+   of the god lanes. It starts with all gods shown. Tap one god to show
+   only that god, then tap more gods to add them back. Remove the last
+   one to see all again. Gods of already-selected boons are shown by
+   default when the picker opens.
+3. **Read a boon.** Tap a boon tile. A popover opens with the name,
+   the god, the ability slot, the effect, its damage, and every Duo
+   Boon it can help unlock.
+4. **Add it to your run.** Press **Select boon** in the popover. The
+   boon leaves the picker list and appears as a chip under **Your
+   boons**. Picked boons are never shown in the picker again.
+5. **Tune the boon.** Tap a chip to open its popover. Set the
+   **rarity** (common / rare / epic / heroic) and the **level** (1–6,
+   the number of Poms of Power on it). Both change the damage in the
+   popover and in the calculator, and the chip shows a rarity/level
+   badge. Boons that cannot take Poms (all Hermes boons, legendary
+   boons, some effect-only boons) show a **fixed** badge; their level
+   stays at 1. Press × on a chip to remove the boon.
+6. **Pick your Daedala.** The **Daedalus** lane inside the picker lists
+   the hammer upgrades for the current weapon. Tap one to select it
+   (✓); tap it again to remove it. You can hold at most 2 Daedala per
+   run, and some exclude each other (the app removes the replaced one
+   and tells you). Daedala picks are kept per weapon, so switching
+   weapons does not lose them.
+7. **Follow the glow.** Once you hold a boon, the app lights up the
+   other boons that would complete a Duo Boon with it. Pick those to
+   set up strong duos.
+8. **Watch the ready duos.** When your picks complete a Duo Boon, a
    toast names it. Duos that change damage (for example **Heart Rend**,
    **+350% critical damage**) apply to the calculator automatically.
 
 ## Damage calculator
 
-The panel below the god filter shows four numbers:
+The panel at the top of the page shows four numbers:
 
 - **Attack** and **Special**: base damage of the selected weapon,
   plus boon modifiers.
@@ -90,14 +116,6 @@ damage = (weapon base + flat boon adds) × (1 + sum of % boon bonuses)
 
 Critical hits add the crit bonus on top of the normal damage.
 
-- **Weapon**: choose one of the six weapons by icon. The row collapses
-  to the chosen weapon to save space; tap the active weapon icon to
-  open the row again and pick another. The **Daedala** row shows only
-  the Daedalus Hammer upgrades for that weapon. You can hold at
-  most 2 Daedala per run, and some exclude each other (the app removes
-  the replaced one and tells you). Your Daedala picks are kept per
-  weapon, so switching weapons does not lose them. Switching weapons
-  also keeps your boon picks.
 - **breakdown**: open it to see every selected modifier by name.
   A ⚠ marks a conditional boon (it only works in a certain situation,
   but the calculator counts it).
@@ -120,7 +138,9 @@ Critical hits add the crit bonus on top of the normal damage.
 
 - **◆ (gold diamond)** on a boon = it can form a Duo Boon.
 - **Glowing border** = picking this boon completes a Duo Boon you can reach.
-- **Gold border + ✓** = the boon is in your current run.
+- **Gold border + ✓** = a selected Daedala (in the Daedalus lane).
+- Picked boons leave the picker list and appear as chips under
+  **Your boons**.
 
 ## Notes
 
