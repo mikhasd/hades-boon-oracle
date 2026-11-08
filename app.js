@@ -571,6 +571,7 @@ function renderSelStrip() {
 
 /* ---------------------------- selection -------------------------------- */
 function toggleSelect(id) {
+  const added = !state.selected.has(id);
   if (state.selected.has(id)) {
     state.selected.delete(id);
   } else {
@@ -581,12 +582,17 @@ function toggleSelect(id) {
   // chip that anchors it was re-rendered)
   const pop = $("#boonPop");
   if (pop.matches(":popover-open") && pop.dataset.bid === id) pop.hidePopover();
+  // picking a boon also closes the "pick a boon" overlay
+  if (added && !$("#picker").hidden) closePicker();
   const ready = readyDuos(state.selected);
   if (ready.length) toast(`${ready.length} duo${ready.length > 1 ? "s" : ""} ready: ${ready.map(d => d.name).join(", ")}`);
 }
 
 /* ------------------------------ picker --------------------------------- */
+let closeTimer;
+
 function openPicker() {
+  clearTimeout(closeTimer);
   defaultGodFilter();
   updateGodFilter();
   updateLanes();
@@ -602,7 +608,8 @@ function closePicker() {
   if (picker.hidden) return;
   picker.classList.remove("open");
   document.body.classList.remove("picker-open");
-  setTimeout(() => { picker.hidden = true; }, 180);
+  clearTimeout(closeTimer);
+  closeTimer = setTimeout(() => { picker.hidden = true; }, 180);
   $("#btnNewBoon").focus();
 }
 
